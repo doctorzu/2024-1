@@ -61,6 +61,7 @@ for k = 1:K
                 [Y_pred, ~, ~] = forecast(EstMdl, length(test), 'Y0', train);
                 
                 % 计算RMSE
+                % 这边有问题，我不知道怎么算？？？转置了维度也匹配不上
                 Y_pred = Y_pred';
                 rmse_values(i, j, l, k) = sqrt(mean((test - Y_pred).^2));
             end
