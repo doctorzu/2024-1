@@ -15,6 +15,14 @@ landthreshold = 1/16;  % 陆地数据过滤阈值，最小NaN比例
 
 % 读取和处理数据
 sst = readnc(sstname);  % 读取海表温度数据
+
+has_missing_values = any(isnan(sst.sst(:)));    % 使用 isnan 函数检查缺失值
+if has_missing_values
+    disp('sst数据包含缺失值，为陆地');
+else
+    disp('sst数据不包含缺失值');
+end
+
 sst = filtbymonth(sst, moi);  % 过滤出感兴趣的月份
 sst = meanbyyear(sst);  % 计算年均值
 sst = trimlongitude(sst);  % 调整经度表示，使用负数表示西经
