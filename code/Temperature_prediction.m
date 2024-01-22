@@ -11,7 +11,7 @@ sstname = [dir, 'HadISST_sst.nc'];  % 文件名，海表温度数据
 moi = 4:7;  % 感兴趣的月份，4月到7月
 latoi = [50, 75];  % 感兴趣的纬度范围（北纬）
 lonoi = [-25, 10];  % 感兴趣的经度范围（东经）
-landthreshold = 1/16;  % 陆地数据过滤阈值，最小NaN比例
+landthreshold = 1/4;  % 陆地数据过滤阈值，最小NaN比例
 
 % 读取和处理数据
 sst = readnc(sstname);  % 读取海表温度数据
@@ -60,18 +60,33 @@ for k = 1:K
     for i = 1:length(p_values)
         for j = 1:length(d_values)
             for l = 1:length(q_values)
-                % 拟合ARIMA模型
+               % 拟合ARIMA模型
                 mdl = arima(p_values(i), d_values(j), q_values(l));
                 train = train(:);
                 EstMdl = estimate(mdl, train);
                 
-                % 进行预测
-                [Y_pred, ~, ~] = forecast(EstMdl, length(test), 'Y0', train);
-                
+                % 获取预测值，限制预测长度
+                Y_pred = forecast(EstMdl, length(test), 'Y0', train);
+                length_test = length(test);
+                size_Y_pred = size(Y_pred, 1);
+                disp(['Length of test: ', num2str(length_test)]);
+                disp(['Size of Y_pred (dimension 1): ', num2str(size_Y_pred)]);
+
+                % 对齐维度
+                disp(['Size of test: ', num2str(size(test))]);
+                disp(['Size of Y_pred: ', num2str(size(Y_pred))]);
+                aligned_test = test(1:min(size(test, 1), numel(Y_pred)), :);
+                aligned_test = aligned_test(:);  % 将 aligned_test 转换为列向量
+                aligned_test = aligned_test(1:length(Y_pred));
+                disp(['Size of aligned_test: ', num2str(size(aligned_test))]);
+
+
+                % 输出关键变量尺寸
+                disp(['Size of aligned_test: ', num2str(size(aligned_test))]);
+                disp(['Size of Y_pred: ', num2str(size(Y_pred))]);
+
                 % 计算RMSE
-                % 这边有问题，我不知道怎么算？？？转置了维度也匹配不上
-                Y_pred = Y_pred';
-                rmse_values(i, j, l, k) = sqrt(mean((test - Y_pred).^2));
+                rmse_values(i, j, l, k) = sqrt(mean((aligned_test - Y_pred).^2, 'all'));
             end
         end
     end
