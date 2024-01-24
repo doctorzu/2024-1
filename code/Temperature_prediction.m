@@ -47,7 +47,7 @@ colormap([0.5 0.5 0.5; jet]);  % 在jet颜色映射前添加灰色，对应于Na
 
 % 保留原有颜色映射的同时，将NaN值设置为灰色
 nanMask = isnan(sst.sst(:, :, 1));
-sst.sst(nanMask) = -Inf;  % 将NaN值设置为无穷小，以便映射到colormap的第一个颜色（灰色）
+% sst.sst(nanMask) = -Inf;  % 将NaN值设置为无穷小，以便映射到colormap的第一个颜色（灰色）
 
 % 绘制海岸线
 hold on;
