@@ -1,42 +1,148 @@
-% 清除环境
+%% 清除环境
 clc();  % 清除命令窗口
-clf();  % 清除图形窗口
 clear();  % 清除工作空间变量
 
 ncdisp("../HadISST_sst.nc")
 
-% 设置参数
+%% 设置参数
 dir = 'D:/2024-MCM/2020-A/';  % 文件路径
 sstname = [dir, 'HadISST_sst.nc'];  % 文件名，海表温度数据
 moi = 4:7;  % 感兴趣的月份，4月到7月
-latoi = [50, 75];  % 感兴趣的纬度范围（北纬）
-lonoi = [-25, 10];  % 感兴趣的经度范围（东经）
-landthreshold = 1/4;  % 陆地数据过滤阈值，最小NaN比例
+latoi = [50, 70];  % 感兴趣的纬度范围（北纬）
+lonoi = [-30, 10];  % 感兴趣的经度范围（东经）
+landthreshold = 1/16;  % 陆地数据过滤阈值，最小NaN比例
 
-% 读取和处理数据
+%% 读取和处理数据
 sst = readnc(sstname);  % 读取海表温度数据
-
-has_missing_values = any(isnan(sst.sst(:)));    % 使用 isnan 函数检查缺失值
-if has_missing_values
-    disp('sst数据包含缺失值，为陆地');
-else
-    disp('sst数据不包含缺失值');
-end
-
 sst = filtbymonth(sst, moi);  % 过滤出感兴趣的月份
 sst = meanbyyear(sst);  % 计算年均值
 sst = trimlongitude(sst);  % 调整经度表示，使用负数表示西经
 sst = filtbylatlon(sst, latoi, lonoi);  % 过滤出感兴趣的纬度和经度范围
 sst.sst = permute(sst.sst, [2, 1, 3]);  % 调整数据维度顺序
 
-% 清除陆地数据并重塑
-[sst, landmask] = landclear(sst, round(landthreshold * numel(sst.time)));  % 过滤掉陆地数据
-sst.sst = reshape(sst.sst, [], size(sst.sst, 3))';  % 重塑数据形状
-sst.sst = sst.sst(:, any(~isnan(sst.sst)));  % 移除全为NaN的列
+% 基本统计信息
+disp('基本统计信息:');
+disp(['最小值: ', num2str(min(sst.sst(:)))]);
+
+% 数据形状
+disp('数据形状:');
+disp(size(sst.sst));
+
+%% 绘图
+figure;
+% 设置坐标轴的实际刻度
+x = linspace(-30, 10, size(sst.sst, 2));  % 假设数据的经度范围是 -30 到 10
+y = linspace(50, 70, size(sst.sst, 1));   % 假设数据的纬度范围是 50 到 70
+% 绘制数据
+data = flipud(sst.sst(:, :, 154));
+imagesc(x, y, data);
+set(gca, 'YDir', 'normal');  % 确保Y轴是从下到上的
+colorbar;
+title('SST 分布（第一个时间点）');
+xlabel('经度');
+ylabel('纬度');
+
+% 自定义颜色映射
+colormap([0.5 0.5 0.5; jet]);  % 在jet颜色映射前添加灰色，对应于NaN值
+
+% 保留原有颜色映射的同时，将NaN值设置为灰色
+nanMask = isnan(sst.sst(:, :, 1));
+sst.sst(nanMask) = -Inf;  % 将NaN值设置为无穷小，以便映射到colormap的第一个颜色（灰色）
+
+% 绘制海岸线
+hold on;
+load coastlines;  % 加载海岸线数据
+plot(coastlon, coastlat, 'k-', 'LineWidth', 0.7);  % 使用加载的海岸线数据绘制海岸线
+hold off;
+
+% 设置坐标轴范围和刻度
+axis ([-30, 10, 50, 70]);  % 调整坐标轴范围
+set(gca, 'XTick', -30:10:10);  % 设置x轴刻度
+set(gca, 'YTick', 50:5:70);   % 设置y轴刻度
+grid on;  % 显示网格
+
+
+
+
+
+
+
+%% 检查特定数据点
+% 例如，查看特定位置和时间的温度
+disp('特定数据点:');
+disp(sst.sst(18, 30, 1)); % 示例：第10纬度，第10经度，第一个时间点的温度
+
+% 初始化一个数组来存储每个时间点的缺失值数量
+missingValues = zeros(1, 154);
+
+% 遍历时间点1到154
+for timePoint = 1:154
+    % 计算每个时间点的缺失值数量
+    missingValues(timePoint) = sum(isnan(sst.sst(:, :, timePoint)), 'all');
+end
+
+% 初始化一个标志变量来跟踪是否存在变化
+hasChange = false;
+
+% 检查并输出缺失值数量的变化
+for timePoint = 2:154
+    if missingValues(timePoint) ~= missingValues(timePoint - 1)
+        disp(['时间点 ', num2str(timePoint), ' 的缺失值数量从 ', ...
+              num2str(missingValues(timePoint - 1)), ' 变化到 ', ...
+              num2str(missingValues(timePoint))]);
+        hasChange = true;
+    end
+end
+
+% 如果没有变化，则输出相应信息
+if ~hasChange
+    disp('从时间点 1 到 154 的缺失值数量始终无变化。');
+end
+
+% 初始化两个数组，一个用于索引和时间点，另一个用于温度
+indexTimeChanges = []; % 格式为 [latIndex, lonIndex, timePoint]
+temperatureChanges = []; % 格式为 [beforeTemp, afterTemp]，均为字符串
+
+% 遍历时间点，从第二个时间点开始
+for timePoint = 2:size(sst.sst, 3)
+    % 遍历每个经纬度位置
+    for latIndex = 1:size(sst.sst, 1)
+        for lonIndex = 1:size(sst.sst, 2)
+            % 获取当前和前一个时间点的温度
+            currentTemp = sst.sst(latIndex, lonIndex, timePoint);
+            previousTemp = sst.sst(latIndex, lonIndex, timePoint - 1);
+
+            % 检查海水变海冰或海冰变海水的情况
+            if (currentTemp < -273.15 && previousTemp >= -273.15) || (currentTemp >= -273.15 && previousTemp < -273.15)
+                % 记录索引和时间点
+                indexTimeChanges = [indexTimeChanges; latIndex, lonIndex, timePoint];
+                % 格式化并记录温度变化
+                temperatureChanges = [temperatureChanges; {sprintf('%.2f', previousTemp), sprintf('%.2f', currentTemp)}];
+            end
+        end
+    end
+end
+
+% 检查是否有变化并输出
+if isempty(indexTimeChanges)
+    disp('没有发现海水与海冰之间的状态变化。');
+else
+    disp('发现海水与海冰之间的状态变化：');
+    for i = 1:size(indexTimeChanges, 1)
+        fprintf('经度索引: %d, 纬度索引: %d, 时间点: %d, 前温度: %s°C, 后温度: %s°C\n', ...
+                indexTimeChanges(i, 1), indexTimeChanges(i, 2), indexTimeChanges(i, 3), ...
+                temperatureChanges{i, 1}, temperatureChanges{i, 2});
+    end
+end
+
+%% 清除陆地数据并重塑
+% [sst, landmask] = landclear(sst, round(landthreshold * numel(sst.time)));  % 过滤掉陆地数据
+% sst.sst = reshape(sst.sst, [], size(sst.sst, 3))';  % 重塑数据形状
+% sst.sst = sst.sst(:, any(~isnan(sst.sst)));  % 移除全为NaN的列
 Y = sst.sst;  % 最终用于分析的数据
 
 
-% 交叉验证和ARIMA模型选择
+%% 交叉验证和ARIMA模型选择
 % 定义交叉验证的折数
 K = 6;
 
@@ -106,7 +212,7 @@ best_q = q_values(q_idx);
 fprintf('Best ARIMA Model: p=%d, d=%d, q=%d\n', best_p, best_d, best_q);
 
 
-% 辅助函数定义
+%% 辅助函数定义
 function indices = crossvalIndices(totalSize, numGroups)
     % 生成交叉验证的随机索引
     indices = randperm(totalSize);
@@ -180,4 +286,4 @@ function [data, landmask] = landclear(data, threshold)
     data.sst(repmat(landmask, [1, 1, size(data.sst, 3)])) = NaN;
 end
 
-% 这里可以添加更多分析和可视化的代码
+%% 这里可以添加更多分析和可视化的代码
